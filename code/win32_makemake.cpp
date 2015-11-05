@@ -1,5 +1,5 @@
 /*
-Create a header here for SVN to fill in later.
+Create a header here for git to fill in later.
  */
 
 #include <Windows.h>
@@ -35,12 +35,10 @@ struct Win32_Window_Dimension
 	int height;
 };
 
-/* How to import functions from XInput.lib without actually telling the linker 
-   to include it in our build file (when compiling). This is due to the fact that 
-   different lib's are used on different Windows platforms, and we don't want the
-   game to not be playable without a gamepad (it won't load if the current platform doesn't
-   support the required .lib and .dll 
-   */
+// Global for now
+global_variable bool Running;
+global_variable Win32_Offscreen_Buffer GlobalBackbuffer;
+global_variable LPDIRECTSOUNDBUFFER secondaryBuffer;
 
 // XInputGetState
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE *pState)
@@ -144,7 +142,7 @@ internal void Win32_InitDirectSound(HWND Window, int32_t SamplesPerSecond, int32
 					}
 					else
 					{
-						// Diagnostics
+						// TODO: messagebox / logging?
 						oss << result;
 						OutputDebugString("Error setting primary buffer format: ");
 						OutputDebugString(oss.str().c_str());
@@ -154,7 +152,7 @@ internal void Win32_InitDirectSound(HWND Window, int32_t SamplesPerSecond, int32
 				}
 				else
 				{
-					// Diagnostics
+					// TODO: messagebox / logging?
 					oss << result;
 					OutputDebugString("Error setting primary buffer format: ");
 					OutputDebugString(oss.str().c_str());
@@ -174,7 +172,6 @@ internal void Win32_InitDirectSound(HWND Window, int32_t SamplesPerSecond, int32
 			bufferDescription.dwBufferBytes = BufferSize;
 			bufferDescription.lpwfxFormat = &waveFormat;
 
-			LPDIRECTSOUNDBUFFER secondaryBuffer;
 			HRESULT result;
 			if (SUCCEEDED(result = directSound->CreateSoundBuffer(&bufferDescription, &secondaryBuffer, 0)))
 			{
@@ -182,7 +179,7 @@ internal void Win32_InitDirectSound(HWND Window, int32_t SamplesPerSecond, int32
 			}
 			else
 			{
-				// Diagnostics
+				// TODO: messagebox / logging?
 				oss << result;
 				OutputDebugString("Error setting primary buffer format: ");
 				OutputDebugString(oss.str().c_str());
@@ -191,7 +188,6 @@ internal void Win32_InitDirectSound(HWND Window, int32_t SamplesPerSecond, int32
 		}
 		else
 		{
-			// Diagnostics
 		}
 	}
 	else
@@ -211,10 +207,6 @@ internal Win32_Window_Dimension Win32_GetWindowDimension(HWND Window)
 
 	return window;
 }
-
-// Global for now
-global_variable bool Running;
-global_variable Win32_Offscreen_Buffer GlobalBackbuffer;
 
 internal void RenderWeirdGradient(Win32_Offscreen_Buffer *Buffer, int BlueOffset, int GreenOffset)
 {
@@ -238,26 +230,6 @@ internal void RenderWeirdGradient(Win32_Offscreen_Buffer *Buffer, int BlueOffset
 			*Pixel++ = ((padding << 24 | red << 16 | green << 8) | blue);
 		}
 		Row +=  Buffer->width*Buffer->bytesPerPixel; // This is the pitch. Set this in the Buffer struct later.
-	}
-}
-
-internal void RenderUserMovement(Win32_Offscreen_Buffer *Buffer, int X, int Y, int Width, int Height)
-{
-	uint8_t *Row = (uint8_t *)Buffer->memory;
-	Row += (Buffer->width*Buffer->bytesPerPixel*Y);
-	for (int y = 0; y < Height; ++y)
-	{
-		uint32_t *Pixel = (uint32_t *)Row + X;
-		for (int x = 0; x < Width; ++x)
-		{
-			uint8_t blue = 0;
-			uint8_t green = 0;
-			uint8_t red = 0;
-			uint8_t padding = 0;
-
-			*Pixel++ = ((padding << 24 | red << 16 | green << 8) | blue);
-		}
-		Row += Buffer->width*Buffer->bytesPerPixel;
 	}
 }
 
@@ -332,9 +304,6 @@ LRESULT CALLBACK Win32_MainWindowCallback(
 	{
 		case WM_SIZE:
 		{
-			//Win32_Window_Dimension dim = Win32_GetWindowDimension(Window);
-			//Win32_ResizeDIBSection(&GlobalBackbuffer, dim.width, dim.height);
-			OutputDebugString("WM_SIZE\n");
 		} break;
 
 		case WM_CLOSE:
@@ -460,7 +429,6 @@ LRESULT CALLBACK Win32_MainWindowCallback(
 
 		default:
 		{
-			//OutputDebugString("Default\n");
 			result = DefWindowProc(Window, Message, WParam, LParam);
 		} break;
 	}
@@ -474,11 +442,6 @@ int CALLBACK WinMain(
 	LPSTR CmdLine,
 	int ShowCode)
 {
-	// For fun! Stack overflow! Guess we have a 2MB stack :)
-	// Optimizer removes it from the stack if we don't clear it (initialize to 0 : = {})
-	// Change stack size with VS C++ compiler with -Fxxxxxxx where x is stack size.
-	// uint8_t BigOlBlock[2 * 1024 * 1024] = {};
-
 	Win32_LoadXInput();
 	WNDCLASS windowClass = {};
 
@@ -511,11 +474,6 @@ int CALLBACK WinMain(
 		{
 			int xOffset = 0;
 			int yOffset = 0;
-
-			int playerXPos = 0;
-			int playerYPos = 0;
-			int playerWidth = 10;
-			int playerHeight = 50;
 
 			/* .xm and .mod format information, taken from VLC mediainformation:
 			   Codec: PCM S16 LE (araw)    --> WAVE_FORMAT_44S16 (trying out WAVE_FORMAT_PCM)
@@ -578,95 +536,32 @@ int CALLBACK WinMain(
 						// dpad
 						if (dPadUp)
 						{
-							//yOffset++;
+							yOffset++;
 
 							// Testing rumble, why controller 1 and not 0?
-							//XINPUT_VIBRATION brrr;
-							//brrr.wLeftMotorSpeed = 60000;
-							//brrr.wRightMotorSpeed = 60000;
-							//XInputSetState(1, &brrr);
+							XINPUT_VIBRATION brrr;
+							brrr.wLeftMotorSpeed = 60000;
+							brrr.wRightMotorSpeed = 60000;
+							XInputSetState(1, &brrr);
 
-							// Use another buffer !!
-							if (playerYPos > 0)
-							{
-								playerYPos--;
-								RenderUserMovement(&GlobalBackbuffer, playerXPos, playerYPos, playerWidth, playerHeight);
-								Win32_DisplayBufferInWindow(deviceContext, &GlobalBackbuffer, dim.width, dim.height);
-							}
 						}
 						if (dPadDown)
 						{
-							//yOffset--;
+							yOffset--;
 
 							// Testing rumble
-							//XINPUT_VIBRATION brrr;
-							//brrr.wLeftMotorSpeed = 0;
-							//brrr.wRightMotorSpeed = 0;
-							//XInputSetState(1, &brrr);
-							if (playerYPos < (dim.height - playerHeight))
-							{
-
-								/*
-								TODO:
-									Grunn til feil:
-									tegner for langt i x retning, den looper litt rundt.
-									spiser av plassen vi kan tegne i y retning, og klarer ikke å oppdage dette før vi
-									skriver til minnelokasjon som vi ikke eier!
-								*/
-								playerYPos++;
-								RenderUserMovement(&GlobalBackbuffer, playerXPos, playerYPos, playerWidth, playerHeight);
-								Win32_DisplayBufferInWindow(deviceContext, &GlobalBackbuffer, dim.width, dim.height);
-
-								OutputDebugString("Moving Down\n");
-
-								oss << playerYPos;
-								OutputDebugString("playerYPos: ");
-								OutputDebugString(oss.str().c_str());
-								OutputDebugString("\n");
-								oss.str(std::string());
-
-								oss << dim.height;
-								OutputDebugString("dim.height: ");
-								OutputDebugString(oss.str().c_str());
-								OutputDebugString("\n");
-								oss.str(std::string());
-							}
+							XINPUT_VIBRATION brrr;
+							brrr.wLeftMotorSpeed = 0;
+							brrr.wRightMotorSpeed = 0;
+							XInputSetState(1, &brrr);
 						}
 						if (dPadLeft)
 						{
-							//xOffset++;
-
-							if (playerXPos > 0)
-							{
-								playerXPos--;
-								RenderUserMovement(&GlobalBackbuffer, playerXPos, playerYPos, playerWidth, playerHeight);
-								Win32_DisplayBufferInWindow(deviceContext, &GlobalBackbuffer, dim.width, dim.height);
-							}
+							xOffset++;
 						}
 						if (dPadRight)
 						{
-							//xOffset--;
-
-							if (playerXPos < (dim.width - playerWidth))
-							{
-								playerXPos++;
-								RenderUserMovement(&GlobalBackbuffer, playerXPos, playerYPos, playerWidth, playerHeight);
-								Win32_DisplayBufferInWindow(deviceContext, &GlobalBackbuffer, dim.width, dim.height);
-
-								OutputDebugString("Moving Right\n");
-
-								oss << playerXPos;
-								OutputDebugString("playerXPos: ");
-								OutputDebugString(oss.str().c_str());
-								OutputDebugString("\n");
-								oss.str(std::string());
-
-								oss << dim.width;
-								OutputDebugString("dim.width: ");
-								OutputDebugString(oss.str().c_str());
-								OutputDebugString("\n");
-								oss.str(std::string());
-							}
+							xOffset--;
 						}
 
 						// stick right
@@ -712,7 +607,7 @@ int CALLBACK WinMain(
 		}
 		else
 		{
-			// TODO: Logging in case of fauil.
+			// TODO: Logging in case of fail.
 		}
 	}
 	else
